@@ -56,7 +56,8 @@ export class StorageConfig {
 	 * - `~/.n8n/binaryData` does not exist (nothing to migrate)
 	 *
 	 * Migration throws if...
-	 * - `~/.n8n/storage` happens to be in use already (user must rename).
+	 * - `~/.n8n/storage` happens to be in use already (user must rename), or
+	 * - `~/.n8n/binaryData` is a mount point (user must remount or keep the path).
 	 */
 	private migrateStorageDir() {
 		if (this.instanceSettings.fsStorageMigrated) return;
@@ -79,8 +80,14 @@ export class StorageConfig {
 			this.instanceSettings.markFsStorageMigrated();
 		} catch (error) {
 			if (this.isIgnorableRenameError(error)) return;
+			if (this.isMountPointError(error)) throw StoragePathError.mountPoint(oldPath, newPath);
 			throw error;
 		}
+	}
+
+	/** Linux refuses to rename a directory that is itself a mount point. */
+	private isMountPointError(error: unknown) {
+		return error !== null && typeof error === 'object' && 'code' in error && error.code === 'EBUSY';
 	}
 
 	private isIgnorableRenameError(error: unknown): error is NodeJS.ErrnoException {

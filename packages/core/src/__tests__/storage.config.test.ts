@@ -148,6 +148,16 @@ describe('StorageConfig', () => {
 			expect(() => Container.get(StorageConfig)).not.toThrow();
 		});
 
+		it('should report a mount point when the rename fails with `EBUSY`', () => {
+			(existsSync as Mock).mockReturnValueOnce(true).mockReturnValueOnce(false);
+			(renameSync as Mock).mockImplementation(() => {
+				throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+			});
+
+			expect(() => Container.get(StorageConfig)).toThrow(/is a mount point/);
+			expect(markFsStorageMigrated).not.toHaveBeenCalled();
+		});
+
 		it('should rethrow other errors', () => {
 			(existsSync as Mock)
 				.mockReturnValueOnce(true) // old path exists
