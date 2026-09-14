@@ -388,6 +388,56 @@ describe('renderAiPreferences', () => {
 });
 
 describe('flattenAiPreferences', () => {
+	const MARKETING = { id: 'p-1', name: 'Marketing', items: ['Prefer HubSpot nodes.'] };
+
+	/**
+	 * Same decision table as `renderAiPreferences` above, over the same input shape: each group
+	 * is either absent or present, independently. `renderAiPreferences` and `flattenAiPreferences`
+	 * are separate implementations reading the same `ApplicableAiPreferences`, so a class covered
+	 * for one is not automatically covered for the other.
+	 */
+	it.each([
+		{ instance: false, personal: false, projects: false, expected: [] },
+		{ instance: true, personal: false, projects: false, expected: ['Use British English.'] },
+		{ instance: false, personal: true, projects: false, expected: ['Keep replies short.'] },
+		{ instance: false, personal: false, projects: true, expected: ['Prefer HubSpot nodes.'] },
+		{
+			instance: true,
+			personal: true,
+			projects: false,
+			expected: ['Use British English.', 'Keep replies short.'],
+		},
+		{
+			instance: true,
+			personal: false,
+			projects: true,
+			expected: ['Use British English.', 'Prefer HubSpot nodes.'],
+		},
+		{
+			instance: false,
+			personal: true,
+			projects: true,
+			expected: ['Keep replies short.', 'Prefer HubSpot nodes.'],
+		},
+		{
+			instance: true,
+			personal: true,
+			projects: true,
+			expected: ['Use British English.', 'Keep replies short.', 'Prefer HubSpot nodes.'],
+		},
+	])(
+		'instance=$instance personal=$personal projects=$projects',
+		({ instance, personal, projects, expected }) => {
+			const items = flattenAiPreferences({
+				instance: instance ? ['Use British English.'] : [],
+				user: personal ? ['Keep replies short.'] : [],
+				projects: projects ? [MARKETING] : [],
+			});
+
+			expect(items).toEqual(expected);
+		},
+	);
+
 	it('orders items instance, then personal, then projects, in caller order', () => {
 		const items = flattenAiPreferences({
 			instance: ['A'],
@@ -399,9 +449,5 @@ describe('flattenAiPreferences', () => {
 		});
 
 		expect(items).toEqual(['A', 'B', 'C', 'D', 'E']);
-	});
-
-	it('returns an empty array when nothing is saved', () => {
-		expect(flattenAiPreferences({ instance: [], user: [], projects: [] })).toEqual([]);
 	});
 });
