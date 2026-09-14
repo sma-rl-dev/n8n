@@ -4,6 +4,10 @@
 # Ignore everything first
 *
 
+# tester-env builds the editable monorepo. BuildKit cache mounts in its
+# Dockerfile keep dependency downloads and Turbo outputs across source edits.
+!**
+
 # === n8n main image (docker/images/n8n/Dockerfile) ===
 !compiled
 !compiled/**
@@ -38,4 +42,3 @@
 !packages/@n8n/benchmark/**
 !packages/@n8n/typescript-config
 !packages/@n8n/typescript-config/**
-

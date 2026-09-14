@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1.7
+FROM node:24-bookworm AS build
+
+WORKDIR /workspace
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH TURBO_CACHE_DIR=/turbo
+RUN corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+# The lockfile fetch is independent of application sources. The cache mounts
+# keep dependency and Turbo work out of source-change rebuilds.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
+RUN --mount=type=cache,id=n8n-pnpm-store,target=/pnpm/store pnpm fetch --frozen-lockfile
+
+COPY . .
+RUN --mount=type=cache,id=n8n-pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --offline
+RUN --mount=type=cache,id=n8n-pnpm-store,target=/pnpm/store --mount=type=cache,id=n8n-turbo,target=/turbo pnpm build:deploy
+# The deployment contains an isolated-vm prebuild that does not work in this
+# Node 24 Debian runtime. Rebuild it against the builder's matching ABI.
+RUN module=$(dirname "$(find /workspace/compiled/node_modules/.pnpm -path '*/isolated-vm/package.json' -print -quit)") && cd "$module" && rm -rf prebuilds && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release -j max
+
+FROM node:24-bookworm
+
+WORKDIR /home/node
+ENV NODE_ENV=production N8N_USER_FOLDER=/home/node/.n8n
+COPY --from=build --chown=node:node /workspace/compiled /opt/n8n
+USER node
+EXPOSE 5678
+CMD ["node", "/opt/n8n/bin/n8n"]

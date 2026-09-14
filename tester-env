@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+suffix="${RUN_ID:+-${RUN_ID}}"
+PROJECT="tester-env-n8n${suffix}"
+IMAGE_NAME="${IMAGE_TAG:-tester-env-n8n:dev}"
+PORT="${PORT:-18567}"
+COMPOSE=(docker compose -p "$PROJECT" -f "$SCRIPT_DIR/docker-compose.tester-env.yml")
+
+usage() {
+	cat <<'EOF'
+Usage: ./tester-env {deploy|reset|stop|status|logs|seed|verify|help}
+
+Environment: PORT (default 18567), RUN_ID (isolates compose project/data),
+IMAGE_TAG (default tester-env-n8n:dev; supplied by scripts/rl-env).
+Credentials: admin@tester.local / password.
+EOF
+}
+
+wait_for_http() {
+	for _ in {1..120}; do
+		if curl -fsS "http://localhost:${PORT}/healthz" >/dev/null; then return; fi
+		sleep 1
+	done
+	"${COMPOSE[@]}" logs --tail 100
+	return 1
+}
+
+case "${1:-help}" in
+	deploy)
+		echo "==> Building ${IMAGE_NAME} from source"
+		IMAGE_TAG="$IMAGE_NAME" PORT="$PORT" "${COMPOSE[@]}" up --build -d
+		echo "==> Waiting for http://localhost:${PORT}/healthz"
+		wait_for_http
+		echo "==> Ready: http://localhost:${PORT}/"
+		;;
+	reset)
+		echo "==> Removing ${PROJECT} containers and SQLite volume"
+		"${COMPOSE[@]}" down -v
+		;;
+	stop)
+		echo "==> Stopping ${PROJECT}"
+		"${COMPOSE[@]}" stop
+		;;
+	status) "${COMPOSE[@]}" ps ;;
+	logs) "${COMPOSE[@]}" logs --tail 200 ;;
+	seed) "$SCRIPT_DIR/scripts/seed-tester-env.sh" ;;
+	verify)
+		curl -fsS "http://localhost:${PORT}/healthz" >/dev/null
+		SEED_EMAIL="${SEED_EMAIL:-admin@tester.local}" SEED_PASSWORD="${SEED_PASSWORD:-password}" python3 - "$PORT" <<'EOF'
+import json, sys, urllib.request, http.cookiejar, os
+port, jar = sys.argv[1], http.cookiejar.CookieJar()
+op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+email, password = os.environ['SEED_EMAIL'], os.environ['SEED_PASSWORD']
+op.open(urllib.request.Request(f'http://localhost:{port}/rest/login',
+    data=json.dumps({"emailOrLdapLoginId": email, "password": password}).encode(),
+    headers={'Content-Type': 'application/json'}))
+ws = json.load(op.open(f'http://localhost:{port}/rest/workflows?skip=0&take=100'))
+want = {"Daily Sales Report": (True, "reporting"),
+        "Support Ticket Triage": (False, "support"),
+        "Inventory Low Stock Alert": (False, "inventory")}
+got = {w['name']: (w['active'], [t['name'] for t in w.get('tags', []) if t]) for w in ws['data']}
+assert ws['count'] == 3, f"expected 3 workflows, got {ws['count']}: {sorted(got)}"
+for name, (active, tag) in want.items():
+    assert name in got, f"missing workflow {name!r}: {sorted(got)}"
+    assert got[name][0] == active, f"{name!r} active={got[name][0]}, want {active}"
+    assert tag in got[name][1], f"{name!r} tags={got[name][1]}, want {tag!r}"
+print("verify ok: 3 seeded workflows (1 active, 2 inactive) with expected tags")
+EOF
+		;;
+	help|-h|--help) usage ;;
+	*) usage >&2; exit 2 ;;
+esac
