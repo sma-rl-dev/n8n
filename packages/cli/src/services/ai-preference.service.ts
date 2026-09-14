@@ -135,6 +135,19 @@ export function renderAiPreferences(preferences: ApplicableAiPreferences): strin
 	return [AI_PREFERENCES_INTRO, ...groups.map(renderGroup)].join('\n\n');
 }
 
+/**
+ * Flattens the preferences into the order `renderAiPreferences` renders them in: instance,
+ * then personal, then projects. For callers that want the raw items instead of prompt text,
+ * such as a tool's structured output.
+ */
+export function flattenAiPreferences(preferences: ApplicableAiPreferences): string[] {
+	return [
+		...preferences.instance,
+		...preferences.user,
+		...preferences.projects.flatMap((project) => project.items),
+	];
+}
+
 function renderGroup({ heading, items }: { heading: string; items: string[] }): string {
 	// A multi-line preference stays one bullet.
 	const bullets = items.map(

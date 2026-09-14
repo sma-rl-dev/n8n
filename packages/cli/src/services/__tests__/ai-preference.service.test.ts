@@ -10,6 +10,7 @@ import { mock } from 'vitest-mock-extended';
 
 import {
 	AiPreferenceService,
+	flattenAiPreferences,
 	groupAiPreferences,
 	renderAiPreferences,
 } from '@/services/ai-preference.service';
@@ -383,5 +384,24 @@ describe('renderAiPreferences', () => {
 		};
 
 		expect(renderAiPreferences(preferences)).toBe(renderAiPreferences(preferences));
+	});
+});
+
+describe('flattenAiPreferences', () => {
+	it('orders items instance, then personal, then projects, in caller order', () => {
+		const items = flattenAiPreferences({
+			instance: ['A'],
+			user: ['B'],
+			projects: [
+				{ id: 'p-1', name: 'Marketing', items: ['C', 'D'] },
+				{ id: 'p-2', name: 'Sales', items: ['E'] },
+			],
+		});
+
+		expect(items).toEqual(['A', 'B', 'C', 'D', 'E']);
+	});
+
+	it('returns an empty array when nothing is saved', () => {
+		expect(flattenAiPreferences({ instance: [], user: [], projects: [] })).toEqual([]);
 	});
 });
