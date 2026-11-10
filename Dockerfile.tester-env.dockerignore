@@ -1,0 +1,59 @@
+# Build context for Dockerfile.tester-env.
+#
+# BuildKit reads this file INSTEAD OF the product root .dockerignore when it
+# builds Dockerfile.tester-env, and only then. The product whitelist (a bare
+# `*` plus a short allow-list) stays untouched for the product images it
+# serves, but it cannot serve an editable-source build: it excludes the
+# monorepo workspace sources and root manifests such as .npmrc.
+#
+# The build (pnpm fetch/install/build:deploy from the full monorepo checkout)
+# keeps everything it reads: root manifests including .npmrc, patches/,
+# scripts/, .github/scripts/, every workspace package source, and root
+# configs. Only regeneration outputs, VCS metadata, secrets-shaped local env
+# files, credential files, logs and editor noise are excluded. No negations:
+# nothing needed is re-included from inside an excluded directory.
+.git
+.git/**
+node_modules
+node_modules/**
+**/node_modules
+**/node_modules/**
+compiled
+compiled/**
+**/compiled
+**/compiled/**
+dist
+dist/**
+**/dist
+**/dist/**
+.turbo
+.turbo/**
+**/.turbo
+**/.turbo/**
+coverage
+coverage/**
+coverage-by-spec
+coverage-by-spec/**
+**/coverage
+**/coverage/**
+.env
+.env.*
+**/.env
+**/.env.*
+**/google-generated-credentials.json
+*.log
+**/*.log
+*.tsbuildinfo
+**/*.tsbuildinfo
+.DS_Store
+**/.DS_Store
+.vscode
+.vscode/**
+**/.vscode
+**/.vscode/**
+.idea
+.idea/**
+**/.idea
+**/.idea/**
+*.swp
+**/*.swp
