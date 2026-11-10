@@ -7,6 +7,12 @@ RUN corepack enable && apt-get update && apt-get install -y --no-install-recomme
 
 # The lockfile fetch is independent of application sources. The cache mounts
 # keep dependency and Turbo work out of source-change rebuilds.
+# DOCKER_BUILD=true is the project's own signal for running inside a container
+# image build (packages/@n8n/benchmark/Dockerfile and scripts/build-n8n.mjs set
+# it too). The root "prepare" script otherwise runs "pnpm lefthook install",
+# which needs a .git checkout that a build context does not have, so
+# "pnpm install" exits 1 with ELIFECYCLE before compiling anything.
+ENV DOCKER_BUILD=true
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches ./patches
 RUN --mount=type=cache,id=n8n-pnpm-store,target=/pnpm/store pnpm fetch --frozen-lockfile
