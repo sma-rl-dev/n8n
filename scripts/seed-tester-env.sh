@@ -32,18 +32,25 @@ def call(method, path, data=None):
     try:
         with op.open(req) as r:
             body = r.read().decode() or '{}'
-            return r.status, json.loads(body)
+            # While the app boots it answers HTTP 200 with an HTML placeholder
+            # ("n8n is starting up. Please wait") instead of JSON. Return the
+            # raw text so the retry loops below can wait for real JSON.
+            try:
+                return r.status, json.loads(body)
+            except json.JSONDecodeError:
+                return r.status, body
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()[:1000]
 
-# Owner login may 404/401 until first boot finishes; retry briefly.
+# Owner login may 404/401 (or the startup placeholder) until first boot
+# finishes; retry briefly.
 for _ in range(60):
     s, b = call('POST', '/rest/login',
                 {"emailOrLdapLoginId": email, "password": password})
-    if s == 200:
+    if s == 200 and isinstance(b, dict):
         break
     time.sleep(1)
-assert s == 200, f"login failed: {s} {b}"
+assert s == 200 and isinstance(b, dict), f"login failed: {s} {b}"
 
 _, tags_body = call('GET', '/rest/tags')
 tag_ids = {t['name']: t['id'] for t in tags_body['data']}
