@@ -41,9 +41,12 @@ runtime ABI). Cold dependency fetch ~94s, first full source build ~5m.
 ## Deterministic Seed Data
 
 - Seed command: `./tester-env seed` (via `scripts/seed-tester-env.sh`, REST API).
-- Verify command: `./tester-env verify` (asserts 3 workflows with names, active states, tags).
+- Verify command: `./tester-env verify` (asserts 3 workflows with names, active states, tags, typed Set node fields, and one successful execution per workflow).
 - Workflows: `Daily Sales Report` (active, tag `reporting`), `Support Ticket Triage` (inactive, tag `support`), `Inventory Low Stock Alert` (inactive, tag `inventory`).
+- Set node assignments declare `type` (`string`/`number`) because Set v3.3+ validates the declared type at execution; an untyped assignment fails with `Cannot read properties of undefined (reading 'toLowerCase')`.
+- Visible node output: `Summarize Orders` → `totalOrders=128`, `revenue=4520`; `Label Ticket` → `priority=high`, `team=support`; `Flag Low Stock` → `sku=ACME-WIDGET-42`, `stock=3`.
 - Safe to re-run: existing workflow names are skipped.
+- `verify` executes each workflow once, so it adds three execution records to the instance.
 
 ## Reset
 

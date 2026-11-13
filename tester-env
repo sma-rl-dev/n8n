@@ -49,7 +49,7 @@ case "${1:-help}" in
 	verify)
 		curl -fsS "http://localhost:${PORT}/healthz" >/dev/null
 		SEED_EMAIL="${SEED_EMAIL:-admin@tester.local}" SEED_PASSWORD="${SEED_PASSWORD:-password}" python3 - "$PORT" <<'EOF'
-import json, sys, urllib.request, http.cookiejar, os
+import json, sys, urllib.request, http.cookiejar, os, time
 port, jar = sys.argv[1], http.cookiejar.CookieJar()
 op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 email, password = os.environ['SEED_EMAIL'], os.environ['SEED_PASSWORD']
@@ -67,6 +67,37 @@ for name, (active, tag) in want.items():
     assert got[name][0] == active, f"{name!r} active={got[name][0]}, want {active}"
     assert tag in got[name][1], f"{name!r} tags={got[name][1]}, want {tag!r}"
 print("verify ok: 3 seeded workflows (1 active, 2 inactive) with expected tags")
+
+# Each Set node must declare a type per assignment (Set v3.3+ validates the
+# declared type) and must actually execute, otherwise the seeded state is
+# visible in the list but unusable in the editor.
+want_nodes = {
+    "Daily Sales Report": ("Summarize Orders", {
+        "totalOrders": ("number", 128), "revenue": ("number", 4520)}),
+    "Support Ticket Triage": ("Label Ticket", {
+        "priority": ("string", "high"), "team": ("string", "support")}),
+    "Inventory Low Stock Alert": ("Flag Low Stock", {
+        "sku": ("string", "ACME-WIDGET-42"), "stock": ("number", 3)}),
+}
+ids = {w['name']: w['id'] for w in ws['data']}
+base = f'http://localhost:{port}/rest'
+for name, (node_name, expected) in want_nodes.items():
+    wf = json.load(op.open(f'{base}/workflows/{ids[name]}'))['data']
+    node = next(n for n in wf['nodes'] if n['name'] == node_name)
+    fields = {a['name']: (a.get('type'), a['value'])
+              for a in node['parameters']['assignments']['assignments']}
+    assert fields == expected, f"{name!r}/{node_name} fields={fields}, want {expected}"
+    run = urllib.request.Request(f'{base}/workflows/{ids[name]}/run',
+        data=json.dumps({"destinationNode": {"nodeName": node_name, "mode": "inclusive"}}).encode(),
+        headers={'Content-Type': 'application/json'})
+    execution_id = json.load(op.open(run))['data']['executionId']
+    for _ in range(60):
+        record = json.load(op.open(f'{base}/executions/{execution_id}'))['data']
+        if record['status'] not in ('new', 'running', 'waiting'):
+            break
+        time.sleep(1)
+    assert record['status'] == 'success', f"{name!r} execution {execution_id} status={record['status']}"
+print("verify ok: seeded Set nodes carry typed fields and every workflow executes successfully")
 EOF
 		;;
 	help|-h|--help) usage ;;

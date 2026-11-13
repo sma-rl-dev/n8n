@@ -63,9 +63,19 @@ for name in ("reporting", "support", "inventory"):
 _, wf_body = call('GET', '/rest/workflows?skip=0&take=100')
 existing = {w['name']: w for w in wf_body['data']}
 
+def assignment_type(value):
+    # The runtime validates each assignment against its declared type. An
+    # assignment without "type" makes Set v3.3+ fail to execute with
+    # "Cannot read properties of undefined (reading 'toLowerCase')".
+    if isinstance(value, bool):
+        return 'boolean'
+    if isinstance(value, (int, float)):
+        return 'number'
+    return 'string'
+
 def set_node(nid, name, assignments, x=240):
     return {"parameters": {"assignments": {"assignments": [
-        {"id": f"a{i}", "name": k, "value": v}
+        {"id": f"a{i}", "name": k, "value": v, "type": assignment_type(v)}
         for i, (k, v) in enumerate(assignments)]}, "options": {}},
         "id": nid, "name": name, "type": "n8n-nodes-base.set",
         "typeVersion": 3.4, "position": [x, 0]}
